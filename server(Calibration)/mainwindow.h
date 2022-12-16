@@ -14,6 +14,18 @@
 #include "QTimer"
 #include "QStandardItem"
 #include <QMutex>
+#include <QtSerialPort/QSerialPort>
+#include <QtSerialPort/QSerialPortInfo>
+#include "libmodbus/modbus.h"
+#include "libmodbus/modbus-tcp.h"
+#include "libmodbus/modbus-version.h"
+#include <QTreeView>
+
+#if defined(_WIN32)
+#include<WS2TCPIP.H>
+#else
+#include <sys/socket.h>
+#endif
 
 namespace Ui {
 class MainWindow;
@@ -26,6 +38,8 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
+    modbus_t* m_tcpModbus;
+    modbus_mapping_t* mb_mapping;
 
 private slots:
     void on_pushButton_Listen_clicked();
@@ -42,6 +56,14 @@ private slots:
     void socket_Disconnected();
 	void onTimeout();
 
+    void on_pushButton_StartCV_clicked();
+
+    void on_btn_avalibCOM_clicked();
+
+    void on_btn_openCOM_2_clicked();
+
+    void on_pushButton_WriteCVKB_clicked();
+
 private:
     Ui::MainWindow *ui;
     QTcpServer* server;
@@ -52,7 +74,7 @@ private:
 	QStringList queryList3;
 	QStringList queryList4;
 	QStringList queryList5;
-	QTimer *timerSend = new QTimer(this);
+    QTimer *timerSend = new QTimer();
 	int m_iCurrentSendIndex = 0;
 	QString GetModbusSenddata(QString inputstrData);
 	QString GetTCPModbusSenddata(quint8* inputstrData);
@@ -69,6 +91,11 @@ private:
 	};
 	bool InitTableView();
 	QStandardItemModel *AGCData_model = new QStandardItemModel();
+    QSerialPort serial;
+    QTreeView *tableTree;
+    void OnDelegatePushButtonClicked(QModelIndex index);
+    void initTreeData(QTreeView *tableTree);
+    QStandardItemModel* model = new QStandardItemModel();
 };
 
 #endif // MAINWINDOW_H

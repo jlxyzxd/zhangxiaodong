@@ -1,6 +1,20 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+//#include "pushbuttonitemdelegate.h"
+#include "qmessagebox.h"
+#include "delegate/ReadOnlyDelegate.h"
+#include "delegate/LineEditDelegate.h"
+#include "delegate/SpinBoxDelegate.h"
+#include "delegate/ComboBoxDelegate.h"
+#include "delegate/ProgressBarDelegate.h"
+#include "delegate/IconDelegate.h"
+#include "delegate/DateTimeEditDelegate.h"
+#include "delegate/ButtonDelegate.h"
+#include "qdesktopwidget.h"
 
+#define SETCALIBRATIONCOUNT11 2
+#define SETCALIBRATIONCOUNT12 6
+#define SETCALIBRATIONCOUNT13 4
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -15,26 +29,58 @@ MainWindow::MainWindow(QWidget *parent) :
     server = new QTcpServer();
 	socket = NULL;
 
-    //连接信号槽
     connect(server,&QTcpServer::newConnection,this,&MainWindow::server_New_Connect);
 
 	db = QSqlDatabase::addDatabase("QMYSQL");
-	db.setHostName("localhost");//主机名字
-	db.setDatabaseName("agc");//数据库名字
-	bool bResult = db.open("root", "admin");//用户名、密码，成功返回1
-	if (bResult == false)
-	{
-		qDebug() << "database open fail!";
-	}
-	else
-	{
-		qDebug() << "database open success!";
-	}
+    db.setHostName("localhost");
+    db.setDatabaseName("agc");
+    db.open("root", "admin");
 
 	connect(timerSend, SIGNAL(timeout()), this, SLOT(onTimeout()));
 	m_bRecData = false;
 	//初始化tableview
 	InitTableView();
+    foreach(const QSerialPortInfo &info, QSerialPortInfo::availablePorts())
+    {
+        ui->comboBox_COM->addItem(info.portName());
+    }
+    ui->comboBox_COM->setCurrentIndex(2);
+    ui->comboBox_Botelv->addItem("115200");
+    ui->comboBox_Botelv->addItem("9600");
+    tableTree = ui->treeView_bmsCalibration;
+    tableTree->setStyleSheet("QTreeView::item { border: 1px solid #d9d9d9; border-top-color: transparent; border-bottom-color: transparent; }");
+    initTreeData(tableTree);
+    ReadOnlyDelegate* readOnly = new ReadOnlyDelegate(tableTree);
+    LineEditDelegate* lineEdit = new LineEditDelegate(tableTree);
+    SpinBoxDelegate* spinBox = new SpinBoxDelegate(tableTree);
+    ComboBoxDelegate* comboBox = new ComboBoxDelegate(tableTree);
+    comboBox->setItems(QStringList()<<""<<"");
+    ProgressBarDelegate* progressBar = new ProgressBarDelegate(tableTree);
+    IconDelegate* icon = new IconDelegate(tableTree);
+    DateTimeEditDelegate* dateTime = new DateTimeEditDelegate(tableTree);
+    ButtonDelegate* readBtn = new ButtonDelegate(tableTree);
+
+    QIcon myicon;
+    myicon.addFile(tr("./res/complete.png"));
+    readBtn->setIcon(myicon);
+    connect(readBtn, &ButtonDelegate::clicked, this, &MainWindow::OnDelegatePushButtonClicked);
+    ButtonDelegate* writeBtn = new ButtonDelegate(tableTree);
+
+    myicon.addFile(tr("./res/download_normal.png"));
+    writeBtn->setIcon(myicon);
+    connect(writeBtn, &ButtonDelegate::clicked, this, &MainWindow::OnDelegatePushButtonClicked);
+
+    tableTree->setItemsExpandable(true);
+    tableTree->setItemDelegateForColumn(0, readOnly);
+    tableTree->setItemDelegateForColumn(1, lineEdit);
+    tableTree->setItemDelegateForColumn(2, readOnly);
+    tableTree->setItemDelegateForColumn(3, readBtn);
+    tableTree->setItemDelegateForColumn(4, writeBtn);
+    tableTree->setItemDelegateForColumn(5, readOnly);
+    tableTree->setItemDelegateForColumn(6, readOnly);
+
+    tableTree->expandAll();
+    tableTree->showNormal();
 }
 
 MainWindow::~MainWindow()
@@ -43,7 +89,135 @@ MainWindow::~MainWindow()
     server->deleteLater();
     delete ui;
 }
+void MainWindow::initTreeData(QTreeView *tableTree)
+{
+    QString head = tr("校准项,星云设备值1,BMS值1,星云设备值2,BMS值2,单位,k值,b值,读取,写入,说明");
+    QStringList xx = head.split(',');
+    model->setHorizontalHeaderLabels(head.split(","));
 
+    QStandardItem *item111 = new QStandardItem("电流校准");
+    QString strItem11[SETCALIBRATIONCOUNT11];
+    for(int i=0;i<SETCALIBRATIONCOUNT11;i++){
+        if(0==i){
+            strItem11[i] = QString("充电");
+        }else{
+            strItem11[i] = QString("放电");
+        }
+    }
+    QString dwItem11[SETCALIBRATIONCOUNT11];
+    for(int i=0;i<SETCALIBRATIONCOUNT11;i++){
+        dwItem11[i] = QString("0.1A");
+    }
+    QString strItemRemark11[SETCALIBRATIONCOUNT11];//"k:1000对应1,b:单位：0.1A"
+    for(int i=0;i<SETCALIBRATIONCOUNT11;i++){
+        strItemRemark11[i] = QString("k:1000对应1");
+    }
+    for (int row = 0; row < SETCALIBRATIONCOUNT11; ++row) {
+         QStandardItem *item1 = new QStandardItem(strItem11[row]);
+         QStandardItem *item2 = new QStandardItem(QString(tr("")));
+         QStandardItem *item3 = new QStandardItem(QString(tr("")));
+         QStandardItem *item4 = new QStandardItem(QString(tr("")));
+         QStandardItem *item5 = new QStandardItem(QString(tr("")));
+         QStandardItem *item6 = new QStandardItem(dwItem11[row]);
+         QStandardItem *item7 = new QStandardItem(QString(tr("")));
+         QStandardItem *item8 = new QStandardItem(QString(tr("")));
+         QStandardItem *item9 = new QStandardItem("读取");
+         item9->setData(QString("item%1").arg(1110+row+1),1110+row+1);
+         QStandardItem *item10 = new QStandardItem("写入");
+         item10->setData(QString("item%1").arg(1110+row+1+40),1110+row+1+40);
+         QStandardItem *item11 = new QStandardItem(strItemRemark11[row]);
+         QList<QStandardItem*> list;
+         list << item1 << item2 << item3 << item4 << item5 << item6 << item7<< item8<< item9<< item10<< item11;
+         item111->appendRow(list);
+    }
+    QString strTemp;
+    QString strItem112[SETCALIBRATIONCOUNT12];
+    for(int i=0;i<SETCALIBRATIONCOUNT12;i++){
+        strTemp = QString("单体%1校准").arg(i);
+        strItem112[i] = strTemp;
+    }
+
+    QString dwItem112[SETCALIBRATIONCOUNT12];
+    for(int i=0;i<SETCALIBRATIONCOUNT12;i++){
+        dwItem112[i] = QString("mV");
+    }
+    QString strItemRemark112[SETCALIBRATIONCOUNT12];
+    for(int i=0;i<SETCALIBRATIONCOUNT12;i++){
+        strTemp = QString("单体%1校准,系数为1000").arg(i);
+        strItemRemark112[i] = strTemp;
+    }
+    QStandardItem *item112 = new QStandardItem("电压校准");
+    for (int row = 0; row < SETCALIBRATIONCOUNT12; ++row) {
+         QStandardItem *item1 = new QStandardItem(strItem112[row]);
+         QStandardItem *item2 = new QStandardItem(QString(tr("")));
+         QStandardItem *item3 = new QStandardItem(QString(tr("")));
+         QStandardItem *item4 = new QStandardItem(QString(tr("")));
+         QStandardItem *item5 = new QStandardItem(QString(tr("")));
+         QStandardItem *item6 = new QStandardItem(dwItem112[row]);
+         QStandardItem *item7 = new QStandardItem(QString(tr("")));
+         QStandardItem *item8 = new QStandardItem(QString(tr("")));
+         QStandardItem *item9 = new QStandardItem("读取");
+         item9->setData(QString("item%1").arg(1210+row+1),1210+row+1);
+         QStandardItem *item10 = new QStandardItem("写入");
+         item10->setData(QString("item%1").arg(1210+row+1+40),1210+row+1+40);
+         QStandardItem *item11 = new QStandardItem(strItemRemark112[row]);
+         QList<QStandardItem*> list;
+         list << item1 << item2 << item3 << item4 << item5 << item6 << item7<< item8<< item9<< item10<< item11;
+         item112->appendRow(list);
+    }
+    QString strItem113[SETCALIBRATIONCOUNT13];
+    for(int i=0;i<SETCALIBRATIONCOUNT13;i++){
+        strTemp = QString("温度%1校准偏移值").arg(i);
+        strItem113[i] = strTemp;
+    }
+    QString dwItem113[SETCALIBRATIONCOUNT13];
+    for(int i=0;i<SETCALIBRATIONCOUNT13;i++){
+        dwItem113[i] = QString("0.1℃");
+    }
+    QStandardItem *item113 = new QStandardItem("温度校准参数配置");
+    for (int row = 0; row < SETCALIBRATIONCOUNT13; ++row) {
+         QStandardItem *item1 = new QStandardItem(strItem113[row]);
+         QStandardItem *item2 = new QStandardItem(QString(tr("")));
+         QStandardItem *item3 = new QStandardItem(QString(tr("")));
+         QStandardItem *item4 = new QStandardItem(QString(tr("")));
+         QStandardItem *item5 = new QStandardItem(QString(tr("")));
+         QStandardItem *item6 = new QStandardItem(dwItem113[row]);
+         QStandardItem *item7 = new QStandardItem(QString(tr("")));
+         QStandardItem *item8 = new QStandardItem(QString(tr("")));
+         QStandardItem *item9 = new QStandardItem("读取");
+         item9->setData(QString("item%1").arg(1310+row+1),1310+row+1);
+         QStandardItem *item10 = new QStandardItem("写入");
+         item10->setData(QString("item%1").arg(1310+row+1+40),1310+row+1+40);
+         QStandardItem *item11 = new QStandardItem(strItem113[row]);
+         QList<QStandardItem*> list;
+         list << item1 << item2 << item3 << item4 << item5 << item6 << item7<< item8<< item9<< item10<< item11;
+         item113->appendRow(list);
+    }
+    model->appendRow(item111);
+    model->appendRow(item112);
+    model->appendRow(item113);
+    tableTree->setModel(model);
+    tableTree->setColumnWidth(0,320);
+    tableTree->setColumnWidth(1,100);
+    tableTree->setColumnWidth(2,100);
+    tableTree->setColumnWidth(3,100);
+    tableTree->setColumnWidth(4,100);
+    tableTree->setColumnWidth(5,120);
+    tableTree->setColumnWidth(6,100);
+    tableTree->setColumnWidth(7,90);
+    tableTree->setColumnWidth(8,90);
+    tableTree->setColumnWidth(9,90);
+    tableTree->setColumnWidth(10,90);
+    tableTree->setColumnWidth(11,400);
+    tableTree->setStyleSheet("QTreeView::item {height: 40px;}");
+    tableTree->setSelectionBehavior(QTreeView::SelectRows);
+    tableTree->setSelectionMode(QTreeView::SingleSelection);
+    tableTree->setFocusPolicy(Qt::NoFocus);
+}
+void MainWindow::OnDelegatePushButtonClicked(QModelIndex index)
+{
+
+}
 void MainWindow::on_pushButton_Listen_clicked()
 {
     if(ui->pushButton_Listen->text() == tr("侦听"))
@@ -401,3 +575,76 @@ bool MainWindow::InitTableView()
 {
 	return true;
 }
+
+void MainWindow::on_pushButton_StartCV_clicked()
+{
+    char* buf;
+    QString strRecv,strTemp;
+    int iStrLen = 0;
+    ui->textEdit_Recv->setText("");
+    buf = ui->textEdit_Recv->toPlainText().toLatin1().data();
+    strRecv = buf;
+    iStrLen = strRecv.length();
+    if ((iStrLen>22)&&(strRecv.left(16)=="('item':'01VV01'")){
+        strTemp = strRecv.right(6);
+        strTemp = strTemp.left(4);
+    }
+}
+
+
+void MainWindow::on_btn_avalibCOM_clicked()
+{
+    ui->comboBox_COM->clear();
+
+    foreach(const QSerialPortInfo &info, QSerialPortInfo::availablePorts())
+    {
+        ui->comboBox_COM->addItem(info.portName());
+    }
+}
+
+
+void MainWindow::on_btn_openCOM_2_clicked()
+{
+    QString str = ui->btn_openCOM->text();
+    if(str==QString("打开串口"))
+     {
+        if (serial.isOpen())
+        {
+            serial.close();
+        }
+
+        QString strIP,strPort,strBotelv;
+        QByteArray btIP,btCOM;
+        btCOM = ui->comboBox_COM->currentText().toLocal8Bit();
+        strBotelv = ui->comboBox_Botelv->currentText();
+
+        m_tcpModbus=modbus_new_rtu(btCOM.data(),strBotelv.toInt(),'N',8,1);
+        if (m_tcpModbus == NULL)
+        {
+            QMessageBox::about(NULL, QStringLiteral("警告"), "Unable to allocate libmodbus contex\n");
+            return ;
+        }
+
+        QString strAddrID = "1";
+        modbus_set_slave(m_tcpModbus, strAddrID.toInt());
+
+        modbus_connect(m_tcpModbus);
+
+         ui->comboBox_COM->setEnabled(false);
+         ui->comboBox_Botelv->setEnabled(false);
+         ui->btn_openCOM->setText(QString("关闭串口"));
+
+     }
+     else
+     {
+        modbus_close(m_tcpModbus);
+        modbus_free(m_tcpModbus);
+        m_tcpModbus = NULL;
+
+         ui->comboBox_COM->setEnabled(true);
+         ui->comboBox_Botelv->setEnabled(true);
+         ui->btn_openCOM->setText(QString("打开串口"));
+     }
+}
+
+
